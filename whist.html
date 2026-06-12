@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Contract Whist</title>
   <style>
     :root {
@@ -763,6 +763,7 @@
     </div>
 
     <button class="btn-primary" onclick="startGame()">Start New Game</button>
+    <button class="btn-secondary" onclick="viewGame()">👁 View Game (live)</button>
     <button class="btn-secondary" onclick="viewLeaderboard()">View Leaderboard</button>
   </div>
 
@@ -805,7 +806,8 @@
     </div><!-- /tab-content -->
 
     <div class="bottom-bar">
-      <button class="btn-danger btn-sm" style="flex:1" onclick="doAbandon()">Abandon</button>
+      <button class="btn-danger btn-sm" id="btn-abandon" style="flex:1" onclick="doAbandon()">Abandon</button>
+      <button class="btn-secondary btn-sm" id="btn-back-view" style="flex:1;display:none" onclick="doLeaveView()">← Back</button>
       <button class="btn-primary btn-sm" style="flex:2;display:none" id="btn-next" onclick="doNextHand()">Next Hand →</button>
       <button class="btn-primary btn-sm" style="flex:2;display:none" id="btn-end" onclick="doEndGame()">End Game &amp; Save</button>
     </div>
@@ -838,7 +840,7 @@
       from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
     import {
       getFirestore, doc, getDoc, setDoc, updateDoc,
-      collection, addDoc, getDocs, serverTimestamp
+      collection, addDoc, getDocs, onSnapshot, serverTimestamp
     } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
     const FIREBASE_CONFIG = {
@@ -885,6 +887,8 @@
     // ── State ────────────────────────────────────────────────────
     let roomCode, players, gameId, gd;
     let selectedRoom = null; // { code, players, gameCount } when existing room chosen
+    let viewMode = false;    // read-only observer
+    let viewUnsub = null;    // onSnapshot unsubscriber for view mode
 
     // ── Room dropdown ─────────────────────────────────────────────
     async function loadRooms() {
@@ -1002,6 +1006,45 @@
       enterGameScreen();
     };
 
+    window.viewGame = async function () {
+      const code = selectedRoom?.code || document.getElementById('inp-room').value.trim().toUpperCase();
+      if (!code) return toast('Select or enter a room first');
+
+      // Fetch all games in room, find the most recent active one
+      const gamesSnap = await getDocs(collection(db, 'rooms', code, 'games'));
+      if (gamesSnap.empty) return toast('No games found in this room');
+
+      let bestDoc = null;
+      gamesSnap.forEach(d => {
+        const data = d.data();
+        if (data.status === 'active') {
+          if (!bestDoc || (data.createdAt?.seconds || 0) > (bestDoc.data.createdAt?.seconds || 0)) {
+            bestDoc = { id: d.id, data };
+          }
+        }
+      });
+      if (!bestDoc) return toast('No active game in this room right now');
+
+      // Load room to get players
+      const roomSnap = await getDoc(doc(db, 'rooms', code));
+      if (!roomSnap.exists()) return toast('Room not found');
+
+      roomCode = code;
+      players  = roomSnap.data().players;
+      gameId   = bestDoc.id;
+      gd       = bestDoc.data;
+      viewMode = true;
+
+      enterGameScreen();
+
+      // Live subscription
+      viewUnsub = onSnapshot(doc(db, 'rooms', roomCode, 'games', gameId), snap => {
+        if (!snap.exists()) return;
+        gd = snap.data();
+        renderScorecard();
+      });
+    };
+
     window.viewLeaderboard = async function () {
       let code = selectedRoom?.code || document.getElementById('inp-room').value.trim().toUpperCase();
       if (!code) return toast('Select or enter a room first');
@@ -1020,7 +1063,10 @@
     function enterGameScreen() {
       document.getElementById('setup-screen').hidden = true;
       document.getElementById('game-screen').hidden = false;
-      document.getElementById('hdr-room').textContent = roomCode;
+      document.getElementById('hdr-room').textContent = roomCode + (viewMode ? ' 👁' : '');
+      // In view mode hide action buttons, show back button
+      document.getElementById('btn-abandon').style.display = viewMode ? 'none' : '';
+      document.getElementById('btn-back-view').style.display = viewMode ? '' : 'none';
       renderScorecard();
     }
 
@@ -1061,7 +1107,11 @@
       const bid = rd.bids[player];
       const got = rd.tricks[player];
       if (bid === undefined || bid === '' || got === undefined || got === '') return null;
-      return parseInt(bid) === parseInt(got) ? 10 + parseInt(bid) : parseInt(got);
+      const bidN = parseInt(bid), gotN = parseInt(got);
+      let score = bidN === gotN ? 10 + bidN : gotN;
+      // Round 15 (7NT): bonus +10 for bidding and getting all 7
+      if (rIdx === 14 && bidN === 7 && gotN === 7) score += 10;
+      return score;
     }
 
     function runningTotal(player, upTo) {
@@ -1179,8 +1229,8 @@
 
       // End Game button (Next Hand is the tick in the row)
       const allDone = ar >= 15;
-      document.getElementById('btn-next').style.display = 'none'; // now a row tick button
-      document.getElementById('btn-end').style.display  = allDone ? '' : 'none';
+      document.getElementById('btn-next').style.display = 'none';
+      document.getElementById('btn-end').style.display  = (!viewMode && allDone) ? '' : 'none';
 
       // Build table
       let html = '<thead>';
@@ -1248,7 +1298,7 @@
 
           let bidCell, gotCell;
 
-          if (bidEditable) {
+          if (!viewMode && bidEditable) {
             const dlrAttr  = isDealer ? 'data-dealer="1"' : '';
             const activeCls = (!isReview && pi === curBPI) ? ' si-active' : '';
             bidCell = `<input class="si bid-inp${activeCls}" type="number" inputmode="numeric"
@@ -1260,7 +1310,7 @@
             bidCell = `<span>${bidVal}</span>`;
           }
 
-          if (trickEditable) {
+          if (!viewMode && trickEditable) {
             const activeCls = (!isReview && !tricksCorr && pi === curTPI) ? ' si-active' : '';
             gotCell = `<input class="si got-inp${activeCls}" type="number" inputmode="numeric"
               min="0" max="${ri.cards}" value="${gotVal}"
@@ -1275,8 +1325,8 @@
           html += `<td class="c-tot">${tot}</td>`;
         });
 
-        // Action column — tick button only on current row in review mode
-        html += `<td class="col-act">${(isCur && isReview)
+        // Action column — tick button only on current row in review mode (not in view-only mode)
+        html += `<td class="col-act">${(!viewMode && isCur && isReview)
           ? `<button class="btn-tick" onclick="doNextHand()" title="Next hand">✓</button>`
           : ''}</td>`;
 
@@ -1437,16 +1487,25 @@
 
     window.closeWinner = function () {
       document.getElementById('winner-overlay').classList.remove('show');
-      document.getElementById('game-screen').hidden = true;
-      document.getElementById('setup-screen').hidden = false;
+      backToSetup();
     };
 
     window.doAbandon = function () {
       if (!confirm('Abandon this game? No scores will be saved to the leaderboard.')) return;
       if (gameId) updateDoc(doc(db, 'rooms', roomCode, 'games', gameId), { status: 'abandoned' });
+      backToSetup();
+    };
+
+    window.doLeaveView = function () {
+      if (viewUnsub) { viewUnsub(); viewUnsub = null; }
+      viewMode = false;
+      backToSetup();
+    };
+
+    function backToSetup() {
       document.getElementById('game-screen').hidden = true;
       document.getElementById('setup-screen').hidden = false;
-    };
+    }
 
     // ── Leaderboard ───────────────────────────────────────────────
     window.switchTab = function (tab) {
@@ -1515,7 +1574,8 @@
     }
 
     // ── Init ──────────────────────────────────────────────────────
-    buildPlayerInputs();
+    buildPlayerInputs(null);
+    loadRooms();
 
   </script>
 </body>

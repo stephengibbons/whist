@@ -928,22 +928,25 @@
       el.innerHTML = '';
 
       if (roomData) {
-        title.textContent = 'Players (fixed for this room)';
-        roomData.players.forEach((name, i) => {
+        title.innerHTML = 'Player Order &nbsp;<span style="font-weight:400;color:#aaa;text-transform:none;font-size:12px">(position 1 = dealer this game)</span>';
+        roomData.players.forEach((_, i) => {
           const row = document.createElement('div');
           row.className = 'player-row';
           row.innerHTML = `<span class="player-num">${i + 1}</span>
-            <span class="player-fixed">${name}</span>
-            ${i === 0 ? '<span class="dealer-pill">DEALER G1</span>' : ''}`;
+            <select style="flex:1;font-size:14px;padding:7px 10px" id="plr-ord-${i}" onchange="window.onPlayerOrderChange()">
+              <option value="">— pick player —</option>
+              ${roomData.players.map(p => `<option value="${p}">${p}</option>`).join('')}
+            </select>
+            ${i === 0 ? '<span class="dealer-pill">DEALER</span>' : ''}`;
           el.appendChild(row);
         });
       } else {
-        title.innerHTML = 'Players &nbsp;<span style="font-weight:400;color:#aaa;text-transform:none;font-size:12px">(first = dealer for game 1)</span>';
+        title.innerHTML = 'Players &nbsp;<span style="font-weight:400;color:#aaa;text-transform:none;font-size:12px">(first = dealer)</span>';
         for (let i = 0; i < 7; i++) {
           const row = document.createElement('div');
           row.className = 'player-row';
           row.innerHTML = `<span class="player-num">${i + 1}</span>
-            <input type="text" placeholder="${i === 0 ? 'Player 1 (dealer G1)' : 'Player ' + (i + 1)}"
+            <input type="text" placeholder="${i === 0 ? 'Player 1 (dealer)' : 'Player ' + (i + 1)}"
               maxlength="20" id="plr-${i}">
             ${i === 0 ? '<span class="dealer-pill">DEALER</span>' : ''}`;
           el.appendChild(row);
@@ -951,15 +954,39 @@
       }
     }
 
+    // Refresh dropdowns when a player is picked — disable already-chosen names in other dropdowns
+    window.onPlayerOrderChange = function () {
+      if (!selectedRoom) return;
+      const n = selectedRoom.players.length;
+      const sels = Array.from({ length: n }, (_, i) => document.getElementById(`plr-ord-${i}`));
+      const taken = new Set(sels.map(s => s.value).filter(v => v));
+      sels.forEach(sel => {
+        const cur = sel.value;
+        // Rebuild options
+        sel.innerHTML = `<option value="">— pick player —</option>` +
+          selectedRoom.players.map(p => {
+            const disabled = taken.has(p) && p !== cur ? 'disabled' : '';
+            const selected = p === cur ? 'selected' : '';
+            return `<option value="${p}" ${selected} ${disabled}>${p}</option>`;
+          }).join('');
+      });
+    };
+
     window.startGame = async function () {
       let code, names, startingDealerIndex;
 
       if (selectedRoom) {
-        code  = selectedRoom.code;
-        names = selectedRoom.players;
-        startingDealerIndex = selectedRoom.gameCount % names.length;
-        // Increment gameCount in room doc
-        await updateDoc(doc(db, 'rooms', code), { gameCount: selectedRoom.gameCount + 1 });
+        code = selectedRoom.code;
+        // Read player order from dropdowns — position 0 is always dealer
+        names = [];
+        for (let i = 0; i < selectedRoom.players.length; i++) {
+          const v = document.getElementById(`plr-ord-${i}`)?.value;
+          if (!v) return toast('Select all players before starting');
+          names.push(v);
+        }
+        if (new Set(names).size !== names.length) return toast('Each player must appear once');
+        startingDealerIndex = 0; // position 1 in the list is always dealer for this game
+        await updateDoc(doc(db, 'rooms', code), { gameCount: (selectedRoom.gameCount || 0) + 1 });
       } else {
         code = document.getElementById('inp-room').value.trim().toUpperCase();
         if (!code) return toast('Enter a room code');

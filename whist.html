@@ -1057,9 +1057,9 @@
       if (!roomSnap.exists()) return toast('Room not found');
 
       roomCode = code;
-      players  = roomSnap.data().players;
       gameId   = bestDoc.id;
       gd       = bestDoc.data;
+      players  = gd.players; // use game's arranged order, not room's original order
       viewMode = true;
 
       enterGameScreen();
@@ -1068,6 +1068,7 @@
       viewUnsub = onSnapshot(doc(db, 'rooms', roomCode, 'games', gameId), snap => {
         if (!snap.exists()) return;
         gd = snap.data();
+        players = gd.players; // keep in sync on every update
         renderScorecard();
       });
     };

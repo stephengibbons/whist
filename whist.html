@@ -711,9 +711,8 @@
 
     <div class="bottom-bar">
       <button class="btn-danger btn-sm" style="flex:1" onclick="doAbandon()">Abandon</button>
-      <button class="btn-primary btn-sm" style="flex:2" id="btn-end" onclick="doEndGame()" disabled>
-        End Game &amp; Save
-      </button>
+      <button class="btn-primary btn-sm" style="flex:2;display:none" id="btn-next" onclick="doNextHand()">Next Hand →</button>
+      <button class="btn-primary btn-sm" style="flex:2;display:none" id="btn-end" onclick="doEndGame()">End Game &amp; Save</button>
     </div>
 
   </div><!-- /game-screen -->
@@ -830,12 +829,13 @@
       const ref = await addDoc(collection(db, 'rooms', roomCode, 'games'), {
         players,
         rounds: emptyRounds,
+        currentRound: 0,
         status: 'active',
         createdAt: serverTimestamp(),
       });
 
       gameId = ref.id;
-      gd = { players, rounds: emptyRounds, status: 'active' };
+      gd = { players, rounds: emptyRounds, currentRound: 0, status: 'active' };
 
       enterGameScreen();
     };
@@ -849,7 +849,8 @@
       document.getElementById('game-screen').hidden = false;
       document.getElementById('hdr-room').textContent = roomCode;
       document.getElementById('round-bar').textContent = '';
-      document.getElementById('btn-end').disabled = true;
+      document.getElementById('btn-next').style.display = 'none';
+      document.getElementById('btn-end').style.display  = 'none';
       switchTab('leaderboard');
     };
 
@@ -871,14 +872,23 @@
     }
 
     // ── Current round ─────────────────────────────────────────────
+    function tricksValid(r) {
+      const rd = gd.rounds[r];
+      const allIn = players.every(p => rd.tricks[p] !== undefined && rd.tricks[p] !== '');
+      if (!allIn) return false;
+      const sum = players.reduce((s, p) => s + parseInt(rd.tricks[p]), 0);
+      return sum === ROUNDS[r].cards;
+    }
+
+    function roundIsComplete(r) {
+      if (r >= 15) return false;
+      const rd = gd.rounds[r];
+      const allBids = players.every(p => rd.bids[p] !== undefined && rd.bids[p] !== '');
+      return allBids && tricksValid(r);
+    }
+
     function activeRound() {
-      for (let r = 0; r < 15; r++) {
-        const rd = gd.rounds[r];
-        const allBids = players.every(p => rd.bids[p] !== undefined && rd.bids[p] !== '');
-        const allTricks = players.every(p => rd.tricks[p] !== undefined && rd.tricks[p] !== '');
-        if (!allBids || !allTricks) return r;
-      }
-      return 15; // all done
+      return gd.currentRound ?? 0;
     }
 
     // ── Score calculation ─────────────────────────────────────────
@@ -893,6 +903,7 @@
     function runningTotal(player, upTo) {
       let t = 0;
       for (let r = 0; r <= upTo; r++) {
+        if (!tricksValid(r)) break; // don't count rounds with invalid or missing tricks
         const s = roundScore(player, r);
         if (s !== null) t += s;
       }
@@ -940,13 +951,33 @@
           `Bids: ${order}`;
       }
 
-      // Restriction warning
+      // Restriction / tricks-sum warning bar
       const rbar = document.getElementById('restriction-bar');
       if (ar < 15) {
+        const dIdx = dealerFor(ar);
+        const rd_ar = gd.rounds[ar];
+        const dealerBid = rd_ar.bids[players[dIdx]];
+        const dealerHasBid = dealerBid !== undefined && dealerBid !== '';
         const f = forbiddenBid(ar);
-        if (f !== null) {
+
+        // Check if all tricks entered but sum is wrong
+        const allTricksEntered = players.every(p => rd_ar.tricks[p] !== undefined && rd_ar.tricks[p] !== '');
+        const trickSum = allTricksEntered
+          ? players.reduce((s, p) => s + parseInt(rd_ar.tricks[p]), 0) : 0;
+        const tricksWrong = allTricksEntered && trickSum !== ROUNDS[ar].cards;
+
+        if (tricksWrong) {
           rbar.style.display = 'block';
-          rbar.textContent = `Dealer (${players[dealerFor(ar)]}) cannot bid ${f} — would make total equal cards dealt`;
+          rbar.style.background = '#fde8e8';
+          rbar.style.borderColor = '#e74c3c';
+          rbar.style.color = '#7a0000';
+          rbar.textContent = `⚠ Tricks sum to ${trickSum} but ${ROUNDS[ar].cards} were dealt — correct before continuing`;
+        } else if (f !== null && !dealerHasBid) {
+          rbar.style.display = 'block';
+          rbar.style.background = '';
+          rbar.style.borderColor = '';
+          rbar.style.color = '';
+          rbar.textContent = `Dealer (${players[dIdx]}) cannot bid ${f} — would make total equal cards dealt`;
         } else {
           rbar.style.display = 'none';
         }
@@ -954,8 +985,11 @@
         rbar.style.display = 'none';
       }
 
-      // End-game button
-      document.getElementById('btn-end').disabled = ar < 15;
+      // Next Hand / End Game buttons
+      const complete = roundIsComplete(ar);
+      const allDone  = ar >= 15;
+      document.getElementById('btn-next').style.display = (!allDone && complete) ? '' : 'none';
+      document.getElementById('btn-end').style.display  = allDone ? '' : 'none';
 
       // Build table
       let html = '<thead>';
@@ -973,7 +1007,6 @@
 
       // Sub-headers
       html += '<tr class="sub-hdr">';
-      html += '<th class="col-rnd"></th>';
       players.forEach(() => {
         html += '<th>Called</th><th>Got</th><th>Total</th>';
       });
@@ -996,9 +1029,7 @@
         // Round column
         html += `<td class="col-rnd">
       <div class="rnd-cell">
-        <span class="rnd-num">${r + 1}</span>
-        <span class="rnd-cards">${ri.cards}</span>
-        <span class="rnd-trump ${t.cls}">${t.sym}</span>
+        <span class="rnd-cards">${ri.cards}<span class="rnd-trump ${t.cls}">${t.sym}</span></span>
       </div>
     </td>`;
 
@@ -1130,21 +1161,24 @@
       }
 
       gd.rounds[rIdx].tricks[p] = n;
-
-      // Validate sum when all tricks entered
-      const rd = gd.rounds[rIdx];
-      if (players.every(pl => rd.tricks[pl] !== undefined && rd.tricks[pl] !== '')) {
-        const sum = players.reduce((s, pl) => s + parseInt(rd.tricks[pl]), 0);
-        if (sum !== ri.cards) toast(`⚠ Tricks sum to ${sum}, should be ${ri.cards}`);
-      }
-
       await persist();
       renderScorecard();
     };
 
     async function persist() {
-      await updateDoc(doc(db, 'rooms', roomCode, 'games', gameId), { rounds: gd.rounds });
+      await updateDoc(doc(db, 'rooms', roomCode, 'games', gameId), {
+        rounds: gd.rounds,
+        currentRound: gd.currentRound,
+      });
     }
+
+    window.doNextHand = async function() {
+      const ar = activeRound();
+      if (!roundIsComplete(ar)) return;
+      gd.currentRound = ar + 1;
+      await persist();
+      renderScorecard();
+    };
 
     // ── End game ──────────────────────────────────────────────────
     window.doEndGame = async function () {

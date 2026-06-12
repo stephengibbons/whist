@@ -1,0 +1,1288 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Contract Whist</title>
+  <style>
+    :root {
+      --green-dark: #0d5c2e;
+      --green: #1a7a40;
+      --green-light: #2a9a54;
+      --green-row: #e8f5ee;
+      --green-cur: #c8e6d0;
+      --red: #c0392b;
+      --gold: #e67e22;
+      --bg: #0a4a24;
+      --card: #ffffff;
+      --border: #dde;
+      --muted: #888;
+      --hearts: #c0392b;
+      --diamonds: #c0392b;
+      --clubs: #111;
+      --spades: #111;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      min-height: 100vh;
+      color: #111;
+    }
+
+    /* ── SETUP ─────────────────────────────────────────────── */
+    #setup-screen {
+      max-width: 500px;
+      margin: 0 auto;
+      padding: 28px 16px 40px;
+    }
+
+    .app-title {
+      text-align: center;
+      color: #fff;
+      font-size: 30px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      margin-bottom: 4px;
+    }
+
+    .app-sub {
+      text-align: center;
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 13px;
+      margin-bottom: 28px;
+    }
+
+    .card {
+      background: var(--card);
+      border-radius: 14px;
+      padding: 18px 20px;
+      margin-bottom: 14px;
+      box-shadow: 0 3px 12px rgba(0, 0, 0, 0.25);
+    }
+
+    .card-title {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--green);
+      margin-bottom: 14px;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      margin-bottom: 4px;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 10px 13px;
+      border: 1.5px solid var(--border);
+      border-radius: 9px;
+      font-size: 16px;
+      margin-bottom: 0;
+      transition: border-color 0.15s;
+    }
+
+    input[type="text"]:focus {
+      outline: none;
+      border-color: var(--green);
+    }
+
+    .player-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .player-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .player-num {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      min-width: 18px;
+      text-align: right;
+    }
+
+    .player-row input {
+      flex: 1;
+      margin-bottom: 0;
+    }
+
+    .dealer-pill {
+      font-size: 10px;
+      background: var(--gold);
+      color: #fff;
+      padding: 2px 7px;
+      border-radius: 20px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    button {
+      cursor: pointer;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 700;
+      padding: 13px 20px;
+      transition: filter 0.15s, transform 0.1s;
+    }
+
+    button:active {
+      transform: scale(0.97);
+    }
+
+    button:disabled {
+      opacity: 0.45;
+      cursor: default;
+    }
+
+    .btn-primary {
+      background: var(--green);
+      color: #fff;
+      width: 100%;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      filter: brightness(1.1);
+    }
+
+    .btn-secondary {
+      background: #eee;
+      color: #333;
+      width: 100%;
+      margin-top: 10px;
+    }
+
+    .btn-danger {
+      background: var(--red);
+      color: #fff;
+    }
+
+    .btn-sm {
+      font-size: 13px;
+      padding: 9px 16px;
+    }
+
+    /* ── GAME SCREEN ───────────────────────────────────────── */
+    #game-screen {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .game-header {
+      background: var(--green-dark);
+      color: #fff;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+      gap: 8px;
+    }
+
+    .game-header-left {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .game-room-code {
+      font-size: 11px;
+      opacity: 0.65;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .game-title {
+      font-size: 18px;
+      font-weight: 800;
+    }
+
+    .tab-bar {
+      display: flex;
+      background: rgba(0, 0, 0, 0.25);
+      border-radius: 9px;
+      padding: 3px;
+      gap: 2px;
+      flex-shrink: 0;
+    }
+
+    .tab-btn {
+      background: transparent;
+      color: rgba(255, 255, 255, 0.65);
+      padding: 6px 13px;
+      border-radius: 7px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .tab-btn.active {
+      background: #fff;
+      color: var(--green-dark);
+    }
+
+    /* Round info bar */
+    .round-bar {
+      background: rgba(0, 0, 0, 0.18);
+      color: rgba(255, 255, 255, 0.92);
+      padding: 5px 14px;
+      font-size: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      align-items: center;
+      flex-shrink: 0;
+      background: var(--green);
+    }
+
+    .round-bar strong {
+      color: #fff;
+    }
+
+    /* Restriction warning */
+    .restriction-bar {
+      background: #fff3cd;
+      border-bottom: 1px solid #f0c040;
+      padding: 5px 14px;
+      font-size: 12px;
+      color: #7a5a00;
+      text-align: center;
+      flex-shrink: 0;
+      display: none;
+    }
+
+    /* Tab content */
+    .tab-content {
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .tab-pane {
+      display: none;
+      flex: 1;
+      overflow: hidden;
+      flex-direction: column;
+    }
+
+    .tab-pane.active {
+      display: flex;
+    }
+
+    /* ── SCORECARD GRID ────────────────────────────────────── */
+    .grid-wrap {
+      flex: 1;
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+      background: #f0f4f1;
+    }
+
+    table.sc {
+      border-collapse: collapse;
+      font-size: 11px;
+      background: #fff;
+    }
+
+    table.sc th,
+    table.sc td {
+      border: 1px solid #ccc;
+      text-align: center;
+      padding: 3px 2px;
+      white-space: nowrap;
+    }
+
+    /* Sticky round column */
+    .col-rnd {
+      position: sticky;
+      left: 0;
+      z-index: 2;
+      background: #f0f4f1;
+      min-width: 52px;
+      max-width: 52px;
+    }
+
+    /* Sticky header */
+    table.sc thead th {
+      position: sticky;
+      top: 0;
+      z-index: 3;
+      background: var(--green-dark);
+      color: #fff;
+      padding: 5px 3px;
+    }
+
+    table.sc thead th.col-rnd {
+      z-index: 4;
+      background: var(--green-dark);
+    }
+
+    /* Sub-header row */
+    .sub-hdr th {
+      font-size: 9px;
+      font-weight: 500;
+      color: rgba(255, 255, 255, 0.75);
+      padding: 2px 1px;
+      background: var(--green);
+    }
+
+    .sub-hdr th.col-rnd {
+      background: var(--green);
+    }
+
+    /* Player header */
+    .plr-hdr {
+      font-size: 11px;
+      font-weight: 700;
+      min-width: 108px;
+    }
+
+    .dealer-dot {
+      display: inline-block;
+      background: var(--gold);
+      color: #fff;
+      font-size: 9px;
+      padding: 1px 5px;
+      border-radius: 8px;
+      font-weight: 700;
+      margin-left: 3px;
+      vertical-align: middle;
+    }
+
+    /* Round column content */
+    .rnd-cell {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      line-height: 1.2;
+      padding: 2px 0;
+    }
+
+    .rnd-num {
+      font-size: 10px;
+      font-weight: 700;
+      color: #555;
+    }
+
+    .rnd-cards {
+      font-size: 13px;
+      font-weight: 800;
+      color: #222;
+    }
+
+    .rnd-trump {
+      font-size: 15px;
+    }
+
+    .t-hearts {
+      color: var(--hearts);
+    }
+
+    .t-diamonds {
+      color: var(--diamonds);
+    }
+
+    .t-clubs {
+      color: var(--clubs);
+    }
+
+    .t-spades {
+      color: var(--spades);
+    }
+
+    .t-nt {
+      font-size: 10px;
+      font-weight: 800;
+      color: #555;
+    }
+
+    /* Data cells */
+    .c-bid,
+    .c-got {
+      min-width: 34px;
+    }
+
+    .c-tot {
+      min-width: 36px;
+      font-weight: 700;
+      background: #fafafa;
+    }
+
+    /* Row states */
+    tr.r-current td {
+      background: var(--green-cur) !important;
+    }
+
+    tr.r-current .col-rnd {
+      background: #a8d5b5 !important;
+    }
+
+    tr.r-done td {
+      background: #fff;
+    }
+
+    tr.r-future td {
+      background: #f7f7f7;
+      color: #aaa;
+    }
+
+    tr.r-future .col-rnd {
+      background: #efefef;
+    }
+
+    /* Total row */
+    tr.r-total td {
+      background: var(--green-dark) !important;
+      color: #fff;
+      font-weight: 800;
+      font-size: 12px;
+    }
+
+    tr.r-total .col-rnd {
+      background: var(--green-dark) !important;
+      color: #fff;
+      font-size: 10px;
+    }
+
+    /* Score inputs */
+    .si {
+      width: 30px;
+      border: 1px solid #bbb;
+      border-radius: 5px;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 2px 1px;
+      background: #fff;
+      -moz-appearance: textfield;
+    }
+
+    .si::-webkit-outer-spin-button,
+    .si::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+    }
+
+    .si:focus {
+      border-color: var(--green);
+      outline: none;
+      background: #f0fff4;
+    }
+
+    .si:disabled {
+      background: transparent;
+      border-color: transparent;
+      cursor: default;
+    }
+
+    .si.err {
+      border-color: var(--red) !important;
+      background: #fff0f0;
+    }
+
+    /* ── BOTTOM BAR ────────────────────────────────────────── */
+    .bottom-bar {
+      background: #fff;
+      padding: 10px 14px;
+      border-top: 1px solid #e0e0e0;
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    /* ── LEADERBOARD ───────────────────────────────────────── */
+    .lb-wrap {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      background: #f0f4f1;
+    }
+
+    .lb-title {
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    table.lb {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+      font-size: 13px;
+    }
+
+    table.lb th {
+      background: var(--green-dark);
+      color: #fff;
+      padding: 9px 8px;
+      text-align: left;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    table.lb td {
+      padding: 9px 8px;
+      border-bottom: 1px solid #eee;
+    }
+
+    table.lb tr:last-child td {
+      border-bottom: none;
+    }
+
+    table.lb td:nth-child(3) {
+      font-weight: 800;
+      color: var(--green-dark);
+    }
+
+    /* ── MODAL ─────────────────────────────────────────────── */
+    .overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.72);
+      z-index: 60;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .overlay.show {
+      display: flex;
+    }
+
+    .modal {
+      background: #fff;
+      border-radius: 18px;
+      padding: 28px 24px 22px;
+      max-width: 420px;
+      width: 100%;
+      text-align: center;
+    }
+
+    .modal-trophy {
+      font-size: 52px;
+      margin-bottom: 8px;
+    }
+
+    .modal-title {
+      font-size: 22px;
+      font-weight: 800;
+      margin-bottom: 18px;
+    }
+
+    .results-list {
+      list-style: none;
+      margin-bottom: 20px;
+    }
+
+    .results-list li {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 9px 0;
+      border-bottom: 1px solid #eee;
+      font-size: 14px;
+    }
+
+    .results-list li:last-child {
+      border-bottom: none;
+    }
+
+    .lb-pts {
+      color: var(--gold);
+      font-weight: 800;
+    }
+
+    /* ── TOAST ─────────────────────────────────────────────── */
+    #toast {
+      position: fixed;
+      bottom: 72px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.82);
+      color: #fff;
+      padding: 9px 18px;
+      border-radius: 20px;
+      font-size: 13px;
+      z-index: 80;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s;
+      max-width: 320px;
+      text-align: center;
+    }
+
+    #toast.show {
+      opacity: 1;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- ═══════════════════════════════════════════════════════════
+     SETUP SCREEN
+═══════════════════════════════════════════════════════════ -->
+  <div id="setup-screen">
+    <div class="app-title">Contract Whist</div>
+    <div class="app-sub">15 rounds · real-time scoring · leaderboard</div>
+
+    <div class="card">
+      <div class="card-title">Room</div>
+      <label>Room Code</label>
+      <input type="text" id="inp-room" placeholder="e.g. SMITH" maxlength="12"
+        style="text-transform:uppercase;margin-bottom:0" oninput="this.value=this.value.toUpperCase()">
+    </div>
+
+    <div class="card">
+      <div class="card-title">Players &nbsp;<span
+          style="font-weight:400;color:#aaa;text-transform:none;font-size:12px">(first = dealer for round 1)</span>
+      </div>
+      <div class="player-list" id="player-list">
+        <!-- built by JS -->
+      </div>
+    </div>
+
+    <button class="btn-primary" onclick="startGame()">Start New Game</button>
+    <button class="btn-secondary" onclick="viewLeaderboard()">View Room Leaderboard</button>
+  </div>
+
+
+  <!-- ═══════════════════════════════════════════════════════════
+     GAME SCREEN
+═══════════════════════════════════════════════════════════ -->
+  <div id="game-screen" hidden>
+
+    <div class="game-header">
+      <div class="game-header-left">
+        <span class="game-room-code" id="hdr-room"></span>
+        <span class="game-title">Contract Whist</span>
+      </div>
+      <div class="tab-bar">
+        <button class="tab-btn active" id="tb-scorecard" onclick="switchTab('scorecard')">Scorecard</button>
+        <button class="tab-btn" id="tb-leaderboard" onclick="switchTab('leaderboard')">Leaderboard</button>
+      </div>
+    </div>
+
+    <div class="round-bar" id="round-bar"></div>
+    <div class="restriction-bar" id="restriction-bar"></div>
+
+    <div class="tab-content">
+
+      <!-- Scorecard tab -->
+      <div class="tab-pane active" id="tab-scorecard">
+        <div class="grid-wrap">
+          <table class="sc" id="sc-table"></table>
+        </div>
+      </div>
+
+      <!-- Leaderboard tab -->
+      <div class="tab-pane" id="tab-leaderboard">
+        <div class="lb-wrap" id="lb-wrap">
+          <p style="color:#aaa;padding:32px;text-align:center">Loading…</p>
+        </div>
+      </div>
+
+    </div><!-- /tab-content -->
+
+    <div class="bottom-bar">
+      <button class="btn-danger btn-sm" style="flex:1" onclick="doAbandon()">Abandon</button>
+      <button class="btn-primary btn-sm" style="flex:2" id="btn-end" onclick="doEndGame()" disabled>
+        End Game &amp; Save
+      </button>
+    </div>
+
+  </div><!-- /game-screen -->
+
+
+  <!-- ═══════════════════════════════════════════════════════════
+     WINNER MODAL
+═══════════════════════════════════════════════════════════ -->
+  <div class="overlay" id="winner-overlay">
+    <div class="modal">
+      <div class="modal-trophy">🏆</div>
+      <div class="modal-title" id="winner-title">Game Over!</div>
+      <ul class="results-list" id="results-list"></ul>
+      <button class="btn-primary" onclick="closeWinner()">Back to Setup</button>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+
+  <!-- ═══════════════════════════════════════════════════════════
+     JAVASCRIPT
+═══════════════════════════════════════════════════════════ -->
+  <script type="module">
+
+    // ── Firebase ─────────────────────────────────────────────────
+    import { initializeApp }
+      from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+    import {
+      getFirestore, doc, getDoc, setDoc, updateDoc,
+      collection, addDoc, getDocs, serverTimestamp
+    } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+    const FIREBASE_CONFIG = {
+      apiKey: "AIzaSyBgPG6_MnUSqIli9uKqIWpvgZPq17T09NQ",
+      authDomain: "contractwhist-88c09.firebaseapp.com",
+      projectId: "contractwhist-88c09",
+      storageBucket: "contractwhist-88c09.firebasestorage.app",
+      messagingSenderId: "351109835505",
+      appId: "1:351109835505:web:4c6efd8327057d76fd5750"
+    };
+
+    const fbApp = initializeApp(FIREBASE_CONFIG);
+    const db = getFirestore(fbApp);
+
+    // ── Round definitions ────────────────────────────────────────
+    const ROUNDS = [
+      { cards: 7, trump: 'hearts' },
+      { cards: 6, trump: 'clubs' },
+      { cards: 5, trump: 'diamonds' },
+      { cards: 4, trump: 'spades' },
+      { cards: 3, trump: 'nt' },
+      { cards: 2, trump: 'hearts' },
+      { cards: 1, trump: 'clubs' },
+      { cards: 1, trump: 'diamonds' },
+      { cards: 2, trump: 'spades' },
+      { cards: 3, trump: 'nt' },
+      { cards: 4, trump: 'hearts' },
+      { cards: 5, trump: 'clubs' },
+      { cards: 6, trump: 'diamonds' },
+      { cards: 7, trump: 'spades' },
+      { cards: 7, trump: 'nt' },
+    ];
+
+    const TRUMP = {
+      hearts: { sym: '♥', cls: 't-hearts' },
+      clubs: { sym: '♣', cls: 't-clubs' },
+      diamonds: { sym: '♦', cls: 't-diamonds' },
+      spades: { sym: '♠', cls: 't-spades' },
+      nt: { sym: 'NT', cls: 't-nt' },
+    };
+
+    const RANK_PTS = [3, 2, 1]; // 1st, 2nd, 3rd
+
+    // ── State ────────────────────────────────────────────────────
+    let roomCode, players, gameId, gd; // gd = game document data
+
+    // ── Setup screen ─────────────────────────────────────────────
+    function buildPlayerInputs() {
+      const el = document.getElementById('player-list');
+      el.innerHTML = '';
+      for (let i = 0; i < 7; i++) {
+        const row = document.createElement('div');
+        row.className = 'player-row';
+        row.innerHTML = `
+      <span class="player-num">${i + 1}</span>
+      <input type="text" placeholder="${i === 0 ? 'Player 1 (dealer R1)' : 'Player ' + (i + 1)}"
+        maxlength="20" id="plr-${i}">
+      ${i === 0 ? '<span class="dealer-pill">DEALER</span>' : ''}
+    `;
+        el.appendChild(row);
+      }
+    }
+
+    window.startGame = async function () {
+      const code = document.getElementById('inp-room').value.trim().toUpperCase();
+      if (!code) return toast('Enter a room code');
+
+      const names = [];
+      for (let i = 0; i < 7; i++) {
+        const v = (document.getElementById(`plr-${i}`)?.value || '').trim();
+        if (v) names.push(titleCase(v));
+      }
+      if (names.length < 2) return toast('Enter at least 2 players');
+      if (new Set(names.map(n => n.toLowerCase())).size !== names.length)
+        return toast('Player names must be unique');
+
+      roomCode = code;
+      players = names;
+
+      await setDoc(doc(db, 'rooms', roomCode), { players, updatedAt: serverTimestamp() }, { merge: true });
+
+      const emptyRounds = ROUNDS.map(() => ({ bids: {}, tricks: {} }));
+      const ref = await addDoc(collection(db, 'rooms', roomCode, 'games'), {
+        players,
+        rounds: emptyRounds,
+        status: 'active',
+        createdAt: serverTimestamp(),
+      });
+
+      gameId = ref.id;
+      gd = { players, rounds: emptyRounds, status: 'active' };
+
+      enterGameScreen();
+    };
+
+    window.viewLeaderboard = async function () {
+      const code = document.getElementById('inp-room').value.trim().toUpperCase();
+      if (!code) return toast('Enter a room code first');
+      roomCode = code;
+      players = [];
+      document.getElementById('setup-screen').hidden = true;
+      document.getElementById('game-screen').hidden = false;
+      document.getElementById('hdr-room').textContent = roomCode;
+      document.getElementById('round-bar').textContent = '';
+      document.getElementById('btn-end').disabled = true;
+      switchTab('leaderboard');
+    };
+
+    // ── Game screen ───────────────────────────────────────────────
+    function enterGameScreen() {
+      document.getElementById('setup-screen').hidden = true;
+      document.getElementById('game-screen').hidden = false;
+      document.getElementById('hdr-room').textContent = roomCode;
+      renderScorecard();
+    }
+
+    // ── Dealer / bid-order helpers ────────────────────────────────
+    function dealerFor(rIdx) { return rIdx % players.length; }
+
+    function bidOrderFor(rIdx) {
+      const n = players.length, d = dealerFor(rIdx), order = [];
+      for (let i = 1; i <= n; i++) order.push((d + i) % n);
+      return order; // indices of players in bid order (dealer last)
+    }
+
+    // ── Current round ─────────────────────────────────────────────
+    function activeRound() {
+      for (let r = 0; r < 15; r++) {
+        const rd = gd.rounds[r];
+        const allBids = players.every(p => rd.bids[p] !== undefined && rd.bids[p] !== '');
+        const allTricks = players.every(p => rd.tricks[p] !== undefined && rd.tricks[p] !== '');
+        if (!allBids || !allTricks) return r;
+      }
+      return 15; // all done
+    }
+
+    // ── Score calculation ─────────────────────────────────────────
+    function roundScore(player, rIdx) {
+      const rd = gd.rounds[rIdx];
+      const bid = rd.bids[player];
+      const got = rd.tricks[player];
+      if (bid === undefined || bid === '' || got === undefined || got === '') return null;
+      return parseInt(bid) === parseInt(got) ? 10 + parseInt(bid) : parseInt(got);
+    }
+
+    function runningTotal(player, upTo) {
+      let t = 0;
+      for (let r = 0; r <= upTo; r++) {
+        const s = roundScore(player, r);
+        if (s !== null) t += s;
+      }
+      return t;
+    }
+
+    function finalScores() {
+      return players.map(p => ({ name: p, score: runningTotal(p, 14) }));
+    }
+
+    // ── Forbidden bid for dealer ──────────────────────────────────
+    function forbiddenBid(rIdx) {
+      const rd = gd.rounds[rIdx];
+      const dIdx = dealerFor(rIdx);
+      const cards = ROUNDS[rIdx].cards;
+      let sum = 0;
+      for (let i = 0; i < players.length; i++) {
+        if (i === dIdx) continue;
+        const b = rd.bids[players[i]];
+        if (b === undefined || b === '') return null; // not all others bid yet
+        sum += parseInt(b);
+      }
+      const f = cards - sum;
+      return (f >= 0 && f <= cards) ? f : null;
+    }
+
+    // ── Render scorecard ──────────────────────────────────────────
+    function renderScorecard() {
+      const ar = activeRound();
+
+      // Update round info bar
+      const bar = document.getElementById('round-bar');
+      if (ar >= 15) {
+        bar.innerHTML = '✅ All rounds complete — press <strong>End Game &amp; Save</strong>';
+      } else {
+        const ri = ROUNDS[ar];
+        const t = TRUMP[ri.trump];
+        const dIdx = dealerFor(ar);
+        const order = bidOrderFor(ar).map(i => players[i]).join(' → ');
+        bar.innerHTML =
+          `Round <strong>${ar + 1}/15</strong> &nbsp;·&nbsp; ` +
+          `<strong>${ri.cards}</strong> cards &nbsp;·&nbsp; ` +
+          `<span class="${t.cls}" style="font-size:14px">${t.sym}</span> &nbsp;·&nbsp; ` +
+          `Dealer: <strong>${players[dIdx]}</strong> &nbsp;·&nbsp; ` +
+          `Bids: ${order}`;
+      }
+
+      // Restriction warning
+      const rbar = document.getElementById('restriction-bar');
+      if (ar < 15) {
+        const f = forbiddenBid(ar);
+        if (f !== null) {
+          rbar.style.display = 'block';
+          rbar.textContent = `Dealer (${players[dealerFor(ar)]}) cannot bid ${f} — would make total equal cards dealt`;
+        } else {
+          rbar.style.display = 'none';
+        }
+      } else {
+        rbar.style.display = 'none';
+      }
+
+      // End-game button
+      document.getElementById('btn-end').disabled = ar < 15;
+
+      // Build table
+      let html = '<thead>';
+
+      // Name row
+      html += '<tr>';
+      html += '<th class="col-rnd" rowspan="2">Round</th>';
+      players.forEach((p, pi) => {
+        const isDlr = ar < 15 && pi === dealerFor(ar);
+        html += `<th class="plr-hdr" colspan="3">
+      ${esc(p)}${isDlr ? '<span class="dealer-dot">D</span>' : ''}
+    </th>`;
+      });
+      html += '</tr>';
+
+      // Sub-headers
+      html += '<tr class="sub-hdr">';
+      html += '<th class="col-rnd"></th>';
+      players.forEach(() => {
+        html += '<th>Called</th><th>Got</th><th>Total</th>';
+      });
+      html += '</tr></thead><tbody>';
+
+      // Data rows
+      for (let r = 0; r < 15; r++) {
+        const rd = gd.rounds[r];
+        const ri = ROUNDS[r];
+        const t = TRUMP[ri.trump];
+        const isCur = r === ar;
+        const isDone = r < ar;
+        const cls = isCur ? 'r-current' : (isDone ? 'r-done' : 'r-future');
+        const dIdx = dealerFor(r);
+
+        const allBidsIn = players.every(p => rd.bids[p] !== undefined && rd.bids[p] !== '');
+
+        html += `<tr class="${cls}" data-r="${r}">`;
+
+        // Round column
+        html += `<td class="col-rnd">
+      <div class="rnd-cell">
+        <span class="rnd-num">${r + 1}</span>
+        <span class="rnd-cards">${ri.cards}</span>
+        <span class="rnd-trump ${t.cls}">${t.sym}</span>
+      </div>
+    </td>`;
+
+        // Player columns
+        players.forEach((p, pi) => {
+          const bidVal = rd.bids[p] !== undefined ? rd.bids[p] : '';
+          const gotVal = rd.tricks[p] !== undefined ? rd.tricks[p] : '';
+
+          const isDealer = pi === dIdx;
+          const bidEdit = isCur;
+          const trickEdit = isCur && allBidsIn;
+
+          // Running total: show after tricks entered or for completed rounds
+          const gotEntered = gotVal !== '' && gotVal !== undefined;
+          let tot = '';
+          if (isDone) {
+            tot = runningTotal(p, r);
+          } else if (isCur && gotEntered) {
+            tot = runningTotal(p, r);
+          } else if (r > 0) {
+            // Show total up to last completed round
+            tot = runningTotal(p, r - 1) || '';
+            // only show if at least one round done
+            if (r === 0) tot = '';
+          }
+
+          let bidCell, gotCell;
+
+          if (bidEdit) {
+            const dlrAttr = isDealer ? 'data-dealer="1"' : '';
+            bidCell = `<input class="si bid-inp" type="number" inputmode="numeric"
+          min="0" max="${ri.cards}" value="${bidVal}"
+          data-p="${esc(p)}" data-r="${r}" ${dlrAttr}
+          onfocus="window._bidFocus(this)"
+          onchange="window._bidChange(this)">`;
+          } else {
+            bidCell = `<span>${bidVal}</span>`;
+          }
+
+          if (trickEdit) {
+            gotCell = `<input class="si got-inp" type="number" inputmode="numeric"
+          min="0" max="${ri.cards}" value="${gotVal}"
+          data-p="${esc(p)}" data-r="${r}"
+          onchange="window._gotChange(this)">`;
+          } else {
+            gotCell = `<span>${gotVal}</span>`;
+          }
+
+          html += `<td class="c-bid">${bidCell}</td>`;
+          html += `<td class="c-got">${gotCell}</td>`;
+          html += `<td class="c-tot">${tot !== '' ? tot : ''}</td>`;
+        });
+
+        html += '</tr>';
+      }
+
+      // Totals row
+      html += '<tr class="r-total"><td class="col-rnd">Total</td>';
+      players.forEach(p => {
+        const tot = ar > 0 ? runningTotal(p, Math.min(ar, 14)) : '';
+        html += `<td colspan="3">${tot}</td>`;
+      });
+      html += '</tr>';
+
+      html += '</tbody>';
+      document.getElementById('sc-table').innerHTML = html;
+    }
+
+    // ── Input handlers ────────────────────────────────────────────
+    window._bidFocus = function (el) {
+      const rIdx = parseInt(el.dataset.r);
+      const isDlr = el.dataset.dealer === '1';
+      if (!isDlr) return;
+      const f = forbiddenBid(rIdx);
+      const rbar = document.getElementById('restriction-bar');
+      if (f !== null) {
+        rbar.style.display = 'block';
+        rbar.textContent = `Dealer (${players[dealerFor(rIdx)]}) cannot bid ${f} — would make total equal cards dealt`;
+      }
+    };
+
+    window._bidChange = async function (el) {
+      const rIdx = parseInt(el.dataset.r);
+      const p = el.dataset.p;
+      const ri = ROUNDS[rIdx];
+      const raw = el.value.trim();
+
+      if (raw === '') return;
+
+      const n = parseInt(raw);
+      if (isNaN(n) || n < 0 || n > ri.cards) {
+        toast(`Bid must be 0–${ri.cards}`);
+        el.value = ''; el.classList.add('err');
+        setTimeout(() => el.classList.remove('err'), 1200);
+        return;
+      }
+
+      // Dealer restriction
+      const pi = players.indexOf(p);
+      if (el.dataset.dealer === '1') {
+        const f = forbiddenBid(rIdx);
+        if (f !== null && n === f) {
+          toast(`Dealer cannot bid ${f}`);
+          el.value = ''; el.classList.add('err');
+          setTimeout(() => el.classList.remove('err'), 1200);
+          return;
+        }
+      }
+
+      gd.rounds[rIdx].bids[p] = n;
+      await persist();
+      renderScorecard();
+    };
+
+    window._gotChange = async function (el) {
+      const rIdx = parseInt(el.dataset.r);
+      const p = el.dataset.p;
+      const ri = ROUNDS[rIdx];
+      const raw = el.value.trim();
+
+      if (raw === '') return;
+
+      const n = parseInt(raw);
+      if (isNaN(n) || n < 0 || n > ri.cards) {
+        toast(`Tricks must be 0–${ri.cards}`);
+        el.value = ''; el.classList.add('err');
+        setTimeout(() => el.classList.remove('err'), 1200);
+        return;
+      }
+
+      gd.rounds[rIdx].tricks[p] = n;
+
+      // Validate sum when all tricks entered
+      const rd = gd.rounds[rIdx];
+      if (players.every(pl => rd.tricks[pl] !== undefined && rd.tricks[pl] !== '')) {
+        const sum = players.reduce((s, pl) => s + parseInt(rd.tricks[pl]), 0);
+        if (sum !== ri.cards) toast(`⚠ Tricks sum to ${sum}, should be ${ri.cards}`);
+      }
+
+      await persist();
+      renderScorecard();
+    };
+
+    async function persist() {
+      await updateDoc(doc(db, 'rooms', roomCode, 'games', gameId), { rounds: gd.rounds });
+    }
+
+    // ── End game ──────────────────────────────────────────────────
+    window.doEndGame = async function () {
+      const scores = finalScores().sort((a, b) => b.score - a.score);
+      const ranked = assignPoints(scores);
+
+      for (const e of ranked) {
+        const ref = doc(db, 'rooms', roomCode, 'stats', e.name);
+        const snap = await getDoc(ref);
+        const cur = snap.exists() ? snap.data() : { leaderboardPoints: 0, gamesPlayed: 0, wins: 0, highScore: 0, totalScore: 0 };
+        await setDoc(ref, {
+          leaderboardPoints: (cur.leaderboardPoints || 0) + e.pts,
+          gamesPlayed: (cur.gamesPlayed || 0) + 1,
+          wins: (cur.wins || 0) + (e.rank === 1 ? 1 : 0),
+          highScore: Math.max(cur.highScore || 0, e.score),
+          totalScore: (cur.totalScore || 0) + e.score,
+        });
+      }
+
+      await updateDoc(doc(db, 'rooms', roomCode, 'games', gameId), { status: 'complete' });
+      showWinner(ranked);
+    };
+
+    function assignPoints(sorted) {
+      // sorted desc by score; split points for ties
+      const result = [];
+      let i = 0;
+      while (i < sorted.length) {
+        let j = i;
+        while (j < sorted.length && sorted[j].score === sorted[i].score) j++;
+        // positions i..j-1 share points
+        let pool = 0;
+        for (let k = i; k < j; k++) pool += (k < RANK_PTS.length ? RANK_PTS[k] : 0);
+        const pts = pool / (j - i);
+        for (let k = i; k < j; k++) result.push({ name: sorted[k].name, score: sorted[k].score, rank: i + 1, pts });
+        i = j;
+      }
+      return result;
+    }
+
+    function showWinner(ranked) {
+      const medals = ['🥇', '🥈', '🥉'];
+      document.getElementById('winner-title').textContent =
+        ranked[0].rank === 1 ? `🏆 ${ranked[0].name} wins!` : '🏆 Game over!';
+
+      document.getElementById('results-list').innerHTML =
+        ranked.map((e, i) => `
+      <li>
+        <span>${medals[i] || `${i + 1}.`} ${esc(e.name)}</span>
+        <span>${e.score} pts &nbsp;<span class="lb-pts">+${fmtPts(e.pts)} LB</span></span>
+      </li>`).join('');
+
+      document.getElementById('winner-overlay').classList.add('show');
+    }
+
+    function fmtPts(n) { return n % 1 === 0 ? n : n.toFixed(1); }
+
+    window.closeWinner = function () {
+      document.getElementById('winner-overlay').classList.remove('show');
+      document.getElementById('game-screen').hidden = true;
+      document.getElementById('setup-screen').hidden = false;
+    };
+
+    window.doAbandon = function () {
+      if (!confirm('Abandon this game? No scores will be saved to the leaderboard.')) return;
+      if (gameId) updateDoc(doc(db, 'rooms', roomCode, 'games', gameId), { status: 'abandoned' });
+      document.getElementById('game-screen').hidden = true;
+      document.getElementById('setup-screen').hidden = false;
+    };
+
+    // ── Leaderboard ───────────────────────────────────────────────
+    window.switchTab = function (tab) {
+      ['scorecard', 'leaderboard'].forEach(t => {
+        document.getElementById(`tab-${t}`).classList.toggle('active', t === tab);
+        document.getElementById(`tb-${t}`).classList.toggle('active', t === tab);
+      });
+      if (tab === 'leaderboard') loadLeaderboard();
+    };
+
+    async function loadLeaderboard() {
+      const wrap = document.getElementById('lb-wrap');
+      if (!roomCode) { wrap.innerHTML = '<p style="color:#aaa;padding:32px;text-align:center">Enter a room code on the setup screen first.</p>'; return; }
+
+      wrap.innerHTML = '<p style="color:#aaa;padding:32px;text-align:center">Loading…</p>';
+      const snap = await getDocs(collection(db, 'rooms', roomCode, 'stats'));
+
+      if (snap.empty) {
+        wrap.innerHTML = '<p style="color:#aaa;padding:32px;text-align:center">No completed games in this room yet.</p>';
+        return;
+      }
+
+      const rows = [];
+      snap.forEach(d => rows.push({ name: d.id, ...d.data() }));
+      rows.sort((a, b) => (b.leaderboardPoints || 0) - (a.leaderboardPoints || 0));
+
+      const medals = ['🥇', '🥈', '🥉'];
+      wrap.innerHTML = `
+    <p class="lb-title">Room: ${esc(roomCode)}</p>
+    <table class="lb">
+      <thead><tr>
+        <th>#</th><th>Player</th><th>LB Pts</th><th>Wins</th><th>Games</th><th>Best</th><th>Avg</th>
+      </tr></thead>
+      <tbody>
+        ${rows.map((r, i) => `<tr>
+          <td>${medals[i] || i + 1}</td>
+          <td><strong>${esc(r.name)}</strong></td>
+          <td>${fmtPts(r.leaderboardPoints || 0)}</td>
+          <td>${r.wins || 0}</td>
+          <td>${r.gamesPlayed || 0}</td>
+          <td>${r.highScore || 0}</td>
+          <td>${r.gamesPlayed ? Math.round((r.totalScore || 0) / r.gamesPlayed) : '–'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+    }
+
+    // ── Utilities ─────────────────────────────────────────────────
+    function titleCase(s) {
+      return s.replace(/\S+/g, w => w[0].toUpperCase() + w.slice(1).toLowerCase());
+    }
+
+    function esc(s) {
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    let _toastTimer;
+    function toast(msg) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.classList.add('show');
+      clearTimeout(_toastTimer);
+      _toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+    }
+
+    // ── Init ──────────────────────────────────────────────────────
+    buildPlayerInputs();
+
+  </script>
+</body>
+
+</html>

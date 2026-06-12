@@ -464,6 +464,50 @@
       font-size: 10px;
     }
 
+    /* Tick button in row */
+    .btn-tick {
+      background: var(--green);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+      width: 32px;
+      height: 28px;
+      cursor: pointer;
+      line-height: 1;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: auto;
+    }
+
+    .btn-tick:active { transform: scale(0.93); }
+
+    .col-act {
+      position: sticky;
+      right: 0;
+      background: #f0f4f1;
+      z-index: 2;
+      min-width: 40px;
+      max-width: 40px;
+      border-left: 2px solid #bbb !important;
+    }
+
+    table.sc thead th.col-act {
+      background: var(--green-dark);
+      z-index: 3;
+    }
+
+    tr.r-current .col-act { background: #a8d5b5 !important; }
+
+    /* Highlight the active input (whose turn it is) */
+    .si.si-active {
+      border-color: var(--green);
+      background: #e8fff0;
+      box-shadow: 0 0 0 2px rgba(26,122,64,0.3);
+    }
+
     /* Score inputs */
     .si {
       width: 30px;
@@ -639,6 +683,51 @@
     #toast.show {
       opacity: 1;
     }
+
+    /* ── SELECT / SETUP EXTRAS ─────────────────────────────── */
+    select {
+      width: 100%;
+      padding: 10px 13px;
+      border: 1.5px solid var(--border);
+      border-radius: 9px;
+      font-size: 16px;
+      background: #fff;
+      -webkit-appearance: none;
+      appearance: none;
+      margin-bottom: 0;
+      transition: border-color 0.15s;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 13px center;
+    }
+
+    select:focus { outline: none; border-color: var(--green); }
+
+    .or-divider {
+      text-align: center;
+      color: #bbb;
+      font-size: 12px;
+      margin: 12px 0 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .or-divider::before, .or-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: #eee;
+    }
+
+    .player-fixed {
+      flex: 1;
+      padding: 8px 13px;
+      background: #f5f5f5;
+      border-radius: 9px;
+      font-size: 15px;
+      color: #333;
+    }
   </style>
 </head>
 
@@ -653,22 +742,28 @@
 
     <div class="card">
       <div class="card-title">Room</div>
-      <label>Room Code</label>
+      <label>Existing room</label>
+      <select id="room-select" onchange="onRoomSelect(this.value)">
+        <option value="">— select a room —</option>
+      </select>
+
+      <div class="or-divider">or create new</div>
+
+      <label>New room code</label>
       <input type="text" id="inp-room" placeholder="e.g. SMITH" maxlength="12"
-        style="text-transform:uppercase;margin-bottom:0" oninput="this.value=this.value.toUpperCase()">
+        style="text-transform:uppercase;margin-bottom:0"
+        oninput="this.value=this.value.toUpperCase(); onNewRoomType()">
     </div>
 
     <div class="card">
-      <div class="card-title">Players &nbsp;<span
-          style="font-weight:400;color:#aaa;text-transform:none;font-size:12px">(first = dealer for round 1)</span>
-      </div>
+      <div class="card-title" id="players-card-title">Players</div>
       <div class="player-list" id="player-list">
         <!-- built by JS -->
       </div>
     </div>
 
     <button class="btn-primary" onclick="startGame()">Start New Game</button>
-    <button class="btn-secondary" onclick="viewLeaderboard()">View Room Leaderboard</button>
+    <button class="btn-secondary" onclick="viewLeaderboard()">View Leaderboard</button>
   </div>
 
 
@@ -788,46 +883,113 @@
     const RANK_PTS = [3, 2, 1]; // 1st, 2nd, 3rd
 
     // ── State ────────────────────────────────────────────────────
-    let roomCode, players, gameId, gd; // gd = game document data
+    let roomCode, players, gameId, gd;
+    let selectedRoom = null; // { code, players, gameCount } when existing room chosen
 
-    // ── Setup screen ─────────────────────────────────────────────
-    function buildPlayerInputs() {
+    // ── Room dropdown ─────────────────────────────────────────────
+    async function loadRooms() {
+      const sel = document.getElementById('room-select');
+      const snap = await getDocs(collection(db, 'rooms'));
+      snap.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d.id;
+        opt.textContent = d.id;
+        sel.appendChild(opt);
+      });
+    }
+
+    window.onRoomSelect = async function(code) {
+      document.getElementById('inp-room').value = '';
+      if (!code) {
+        selectedRoom = null;
+        buildPlayerInputs(null);
+        return;
+      }
+      const snap = await getDoc(doc(db, 'rooms', code));
+      if (!snap.exists()) { toast('Room not found'); return; }
+      const data = snap.data();
+      selectedRoom = { code, players: data.players, gameCount: data.gameCount || 0 };
+      buildPlayerInputs(selectedRoom);
+    };
+
+    window.onNewRoomType = function() {
+      document.getElementById('room-select').value = '';
+      selectedRoom = null;
+      buildPlayerInputs(null);
+    };
+
+    function buildPlayerInputs(roomData) {
       const el = document.getElementById('player-list');
+      const title = document.getElementById('players-card-title');
       el.innerHTML = '';
-      for (let i = 0; i < 7; i++) {
-        const row = document.createElement('div');
-        row.className = 'player-row';
-        row.innerHTML = `
-      <span class="player-num">${i + 1}</span>
-      <input type="text" placeholder="${i === 0 ? 'Player 1 (dealer R1)' : 'Player ' + (i + 1)}"
-        maxlength="20" id="plr-${i}">
-      ${i === 0 ? '<span class="dealer-pill">DEALER</span>' : ''}
-    `;
-        el.appendChild(row);
+
+      if (roomData) {
+        title.textContent = 'Players (fixed for this room)';
+        roomData.players.forEach((name, i) => {
+          const row = document.createElement('div');
+          row.className = 'player-row';
+          row.innerHTML = `<span class="player-num">${i + 1}</span>
+            <span class="player-fixed">${name}</span>
+            ${i === 0 ? '<span class="dealer-pill">DEALER G1</span>' : ''}`;
+          el.appendChild(row);
+        });
+      } else {
+        title.innerHTML = 'Players &nbsp;<span style="font-weight:400;color:#aaa;text-transform:none;font-size:12px">(first = dealer for game 1)</span>';
+        for (let i = 0; i < 7; i++) {
+          const row = document.createElement('div');
+          row.className = 'player-row';
+          row.innerHTML = `<span class="player-num">${i + 1}</span>
+            <input type="text" placeholder="${i === 0 ? 'Player 1 (dealer G1)' : 'Player ' + (i + 1)}"
+              maxlength="20" id="plr-${i}">
+            ${i === 0 ? '<span class="dealer-pill">DEALER</span>' : ''}`;
+          el.appendChild(row);
+        }
       }
     }
 
     window.startGame = async function () {
-      const code = document.getElementById('inp-room').value.trim().toUpperCase();
-      if (!code) return toast('Enter a room code');
+      let code, names, startingDealerIndex;
 
-      const names = [];
-      for (let i = 0; i < 7; i++) {
-        const v = (document.getElementById(`plr-${i}`)?.value || '').trim();
-        if (v) names.push(titleCase(v));
+      if (selectedRoom) {
+        code  = selectedRoom.code;
+        names = selectedRoom.players;
+        startingDealerIndex = selectedRoom.gameCount % names.length;
+        // Increment gameCount in room doc
+        await updateDoc(doc(db, 'rooms', code), { gameCount: selectedRoom.gameCount + 1 });
+      } else {
+        code = document.getElementById('inp-room').value.trim().toUpperCase();
+        if (!code) return toast('Enter a room code');
+        names = [];
+        for (let i = 0; i < 7; i++) {
+          const v = (document.getElementById(`plr-${i}`)?.value || '').trim();
+          if (v) names.push(titleCase(v));
+        }
+        if (names.length < 2) return toast('Enter at least 2 players');
+        if (new Set(names.map(n => n.toLowerCase())).size !== names.length)
+          return toast('Player names must be unique');
+        startingDealerIndex = 0;
+        // Create room with fixed players
+        await setDoc(doc(db, 'rooms', code), {
+          players: names,
+          gameCount: 1,
+          createdAt: serverTimestamp(),
+        });
+        // Add to dropdown
+        const sel = document.getElementById('room-select');
+        if (![...sel.options].some(o => o.value === code)) {
+          const opt = document.createElement('option');
+          opt.value = code; opt.textContent = code;
+          sel.appendChild(opt);
+        }
       }
-      if (names.length < 2) return toast('Enter at least 2 players');
-      if (new Set(names.map(n => n.toLowerCase())).size !== names.length)
-        return toast('Player names must be unique');
 
       roomCode = code;
-      players = names;
-
-      await setDoc(doc(db, 'rooms', roomCode), { players, updatedAt: serverTimestamp() }, { merge: true });
+      players  = names;
 
       const emptyRounds = ROUNDS.map(() => ({ bids: {}, tricks: {} }));
       const ref = await addDoc(collection(db, 'rooms', roomCode, 'games'), {
         players,
+        startingDealerIndex,
         rounds: emptyRounds,
         currentRound: 0,
         status: 'active',
@@ -835,18 +997,18 @@
       });
 
       gameId = ref.id;
-      gd = { players, rounds: emptyRounds, currentRound: 0, status: 'active' };
+      gd = { players, startingDealerIndex, rounds: emptyRounds, currentRound: 0, status: 'active' };
 
       enterGameScreen();
     };
 
     window.viewLeaderboard = async function () {
-      const code = document.getElementById('inp-room').value.trim().toUpperCase();
-      if (!code) return toast('Enter a room code first');
+      let code = selectedRoom?.code || document.getElementById('inp-room').value.trim().toUpperCase();
+      if (!code) return toast('Select or enter a room first');
       roomCode = code;
-      players = [];
+      players  = [];
       document.getElementById('setup-screen').hidden = true;
-      document.getElementById('game-screen').hidden = false;
+      document.getElementById('game-screen').hidden  = false;
       document.getElementById('hdr-room').textContent = roomCode;
       document.getElementById('round-bar').textContent = '';
       document.getElementById('btn-next').style.display = 'none';
@@ -863,7 +1025,9 @@
     }
 
     // ── Dealer / bid-order helpers ────────────────────────────────
-    function dealerFor(rIdx) { return rIdx % players.length; }
+    function dealerFor(rIdx) {
+      return ((gd.startingDealerIndex || 0) + rIdx) % players.length;
+    }
 
     function bidOrderFor(rIdx) {
       const n = players.length, d = dealerFor(rIdx), order = [];
@@ -914,6 +1078,25 @@
       return players.map(p => ({ name: p, score: runningTotal(p, 14) }));
     }
 
+    // ── Sequential entry helpers ──────────────────────────────────
+    // Returns the player index whose turn it is to call, or -1 if all called
+    function currentBidderPI(r) {
+      const rd = gd.rounds[r];
+      for (const pi of bidOrderFor(r)) {
+        if (rd.bids[players[pi]] === undefined || rd.bids[players[pi]] === '') return pi;
+      }
+      return -1;
+    }
+
+    // Returns the player index whose turn it is to enter Got, or -1 if all entered
+    function currentTrickPI(r) {
+      const rd = gd.rounds[r];
+      for (const pi of bidOrderFor(r)) {
+        if (rd.tricks[players[pi]] === undefined || rd.tricks[players[pi]] === '') return pi;
+      }
+      return -1;
+    }
+
     // ── Forbidden bid for dealer ──────────────────────────────────
     function forbiddenBid(rIdx) {
       const rd = gd.rounds[rIdx];
@@ -939,16 +1122,25 @@
       if (ar >= 15) {
         bar.innerHTML = '✅ All rounds complete — press <strong>End Game &amp; Save</strong>';
       } else {
-        const ri = ROUNDS[ar];
-        const t = TRUMP[ri.trump];
+        const ri   = ROUNDS[ar];
+        const t    = TRUMP[ri.trump];
         const dIdx = dealerFor(ar);
-        const order = bidOrderFor(ar).map(i => players[i]).join(' → ');
+        const allBidsNow = currentBidderPI(ar) === -1;
+        const isReviewNow = roundIsComplete(ar);
+        let turnText = '';
+        if (isReviewNow) {
+          turnText = '✓ All entered — tap ✓ to advance';
+        } else if (!allBidsNow) {
+          turnText = `Calling: <strong>${players[currentBidderPI(ar)]}</strong>`;
+        } else {
+          const tpi = currentTrickPI(ar);
+          turnText = tpi !== -1 ? `Got: <strong>${players[tpi]}</strong>` : '';
+        }
         bar.innerHTML =
           `Round <strong>${ar + 1}/15</strong> &nbsp;·&nbsp; ` +
-          `<strong>${ri.cards}</strong> cards &nbsp;·&nbsp; ` +
           `<span class="${t.cls}" style="font-size:14px">${t.sym}</span> &nbsp;·&nbsp; ` +
           `Dealer: <strong>${players[dIdx]}</strong> &nbsp;·&nbsp; ` +
-          `Bids: ${order}`;
+          turnText;
       }
 
       // Restriction / tricks-sum warning bar
@@ -985,103 +1177,108 @@
         rbar.style.display = 'none';
       }
 
-      // Next Hand / End Game buttons
-      const complete = roundIsComplete(ar);
-      const allDone  = ar >= 15;
-      document.getElementById('btn-next').style.display = (!allDone && complete) ? '' : 'none';
+      // End Game button (Next Hand is the tick in the row)
+      const allDone = ar >= 15;
+      document.getElementById('btn-next').style.display = 'none'; // now a row tick button
       document.getElementById('btn-end').style.display  = allDone ? '' : 'none';
 
       // Build table
       let html = '<thead>';
 
-      // Name row
+      // Name row — action column sticky-right
       html += '<tr>';
       html += '<th class="col-rnd" rowspan="2">Round</th>';
       players.forEach((p, pi) => {
         const isDlr = ar < 15 && pi === dealerFor(ar);
-        html += `<th class="plr-hdr" colspan="3">
-      ${esc(p)}${isDlr ? '<span class="dealer-dot">D</span>' : ''}
-    </th>`;
+        html += `<th class="plr-hdr" colspan="3">${esc(p)}${isDlr ? '<span class="dealer-dot">D</span>' : ''}</th>`;
       });
+      html += '<th class="col-act" rowspan="2"></th>';
       html += '</tr>';
 
       // Sub-headers
       html += '<tr class="sub-hdr">';
-      players.forEach(() => {
-        html += '<th>Called</th><th>Got</th><th>Total</th>';
-      });
+      players.forEach(() => { html += '<th>Called</th><th>Got</th><th>Total</th>'; });
       html += '</tr></thead><tbody>';
 
       // Data rows
       for (let r = 0; r < 15; r++) {
-        const rd = gd.rounds[r];
-        const ri = ROUNDS[r];
-        const t = TRUMP[ri.trump];
-        const isCur = r === ar;
+        const rd  = gd.rounds[r];
+        const ri  = ROUNDS[r];
+        const t   = TRUMP[ri.trump];
+        const isCur  = r === ar;
         const isDone = r < ar;
-        const cls = isCur ? 'r-current' : (isDone ? 'r-done' : 'r-future');
-        const dIdx = dealerFor(r);
+        const cls    = isCur ? 'r-current' : (isDone ? 'r-done' : 'r-future');
+        const dIdx   = dealerFor(r);
 
-        const allBidsIn = players.every(p => rd.bids[p] !== undefined && rd.bids[p] !== '');
+        // Sequential entry state for this row
+        const allBidsIn   = currentBidderPI(r) === -1;
+        const allTricksIn = currentTrickPI(r) === -1;  // entered but may be wrong sum
+        const isReview    = isCur && roundIsComplete(r);
+        const tricksCorr  = isCur && allBidsIn && allTricksIn && !isReview; // all in but sum wrong → correction mode
+        const curBPI      = isCur && !isReview && !allBidsIn ? currentBidderPI(r) : -1;
+        const curTPI      = isCur && !isReview && allBidsIn && !allTricksIn ? currentTrickPI(r) : -1;
 
         html += `<tr class="${cls}" data-r="${r}">`;
 
         // Round column
-        html += `<td class="col-rnd">
-      <div class="rnd-cell">
-        <span class="rnd-cards">${ri.cards}<span class="rnd-trump ${t.cls}">${t.sym}</span></span>
-      </div>
-    </td>`;
+        html += `<td class="col-rnd"><div class="rnd-cell">` +
+          `<span class="rnd-cards">${ri.cards}<span class="rnd-trump ${t.cls}">${t.sym}</span></span>` +
+          `</div></td>`;
 
         // Player columns
         players.forEach((p, pi) => {
-          const bidVal = rd.bids[p] !== undefined ? rd.bids[p] : '';
+          const bidVal = rd.bids[p]   !== undefined ? rd.bids[p]   : '';
           const gotVal = rd.tricks[p] !== undefined ? rd.tricks[p] : '';
-
           const isDealer = pi === dIdx;
-          const bidEdit = isCur;
-          const trickEdit = isCur && allBidsIn;
 
-          // Running total: show after tricks entered or for completed rounds
-          const gotEntered = gotVal !== '' && gotVal !== undefined;
+          // Editability: review mode (all editable), correction mode (all Got editable), or this player's turn
+          const bidEditable   = isReview || (isCur && pi === curBPI);
+          const trickEditable = isReview || tricksCorr || (isCur && pi === curTPI);
+
+          // Running total
           let tot = '';
           if (isDone) {
             tot = runningTotal(p, r);
-          } else if (isCur && gotEntered) {
+          } else if (isCur && tricksValid(r)) {
             tot = runningTotal(p, r);
           } else if (r > 0) {
-            // Show total up to last completed round
-            tot = runningTotal(p, r - 1) || '';
-            // only show if at least one round done
-            if (r === 0) tot = '';
+            const prev = runningTotal(p, r - 1);
+            tot = prev || '';
           }
 
           let bidCell, gotCell;
 
-          if (bidEdit) {
-            const dlrAttr = isDealer ? 'data-dealer="1"' : '';
-            bidCell = `<input class="si bid-inp" type="number" inputmode="numeric"
-          min="0" max="${ri.cards}" value="${bidVal}"
-          data-p="${esc(p)}" data-r="${r}" ${dlrAttr}
-          onfocus="window._bidFocus(this)"
-          onchange="window._bidChange(this)">`;
+          if (bidEditable) {
+            const dlrAttr  = isDealer ? 'data-dealer="1"' : '';
+            const activeCls = (!isReview && pi === curBPI) ? ' si-active' : '';
+            bidCell = `<input class="si bid-inp${activeCls}" type="number" inputmode="numeric"
+              min="0" max="${ri.cards}" value="${bidVal}"
+              data-p="${esc(p)}" data-r="${r}" ${dlrAttr}
+              onfocus="window._bidFocus(this)"
+              onchange="window._bidChange(this)">`;
           } else {
             bidCell = `<span>${bidVal}</span>`;
           }
 
-          if (trickEdit) {
-            gotCell = `<input class="si got-inp" type="number" inputmode="numeric"
-          min="0" max="${ri.cards}" value="${gotVal}"
-          data-p="${esc(p)}" data-r="${r}"
-          onchange="window._gotChange(this)">`;
+          if (trickEditable) {
+            const activeCls = (!isReview && !tricksCorr && pi === curTPI) ? ' si-active' : '';
+            gotCell = `<input class="si got-inp${activeCls}" type="number" inputmode="numeric"
+              min="0" max="${ri.cards}" value="${gotVal}"
+              data-p="${esc(p)}" data-r="${r}"
+              onchange="window._gotChange(this)">`;
           } else {
             gotCell = `<span>${gotVal}</span>`;
           }
 
           html += `<td class="c-bid">${bidCell}</td>`;
           html += `<td class="c-got">${gotCell}</td>`;
-          html += `<td class="c-tot">${tot !== '' ? tot : ''}</td>`;
+          html += `<td class="c-tot">${tot}</td>`;
         });
+
+        // Action column — tick button only on current row in review mode
+        html += `<td class="col-act">${(isCur && isReview)
+          ? `<button class="btn-tick" onclick="doNextHand()" title="Next hand">✓</button>`
+          : ''}</td>`;
 
         html += '</tr>';
       }
@@ -1092,7 +1289,7 @@
         const tot = ar > 0 ? runningTotal(p, Math.min(ar, 14)) : '';
         html += `<td colspan="3">${tot}</td>`;
       });
-      html += '</tr>';
+      html += '<td class="col-act"></td></tr>';
 
       html += '</tbody>';
       document.getElementById('sc-table').innerHTML = html;
@@ -1188,11 +1385,13 @@
       for (const e of ranked) {
         const ref = doc(db, 'rooms', roomCode, 'stats', e.name);
         const snap = await getDoc(ref);
-        const cur = snap.exists() ? snap.data() : { leaderboardPoints: 0, gamesPlayed: 0, wins: 0, highScore: 0, totalScore: 0 };
+        const cur = snap.exists() ? snap.data() : { leaderboardPoints: 0, gamesPlayed: 0, wins: 0, seconds: 0, thirds: 0, highScore: 0, totalScore: 0 };
         await setDoc(ref, {
           leaderboardPoints: (cur.leaderboardPoints || 0) + e.pts,
           gamesPlayed: (cur.gamesPlayed || 0) + 1,
-          wins: (cur.wins || 0) + (e.rank === 1 ? 1 : 0),
+          wins:    (cur.wins    || 0) + (e.rank === 1 ? 1 : 0),
+          seconds: (cur.seconds || 0) + (e.rank === 2 ? 1 : 0),
+          thirds:  (cur.thirds  || 0) + (e.rank === 3 ? 1 : 0),
           highScore: Math.max(cur.highScore || 0, e.score),
           totalScore: (cur.totalScore || 0) + e.score,
         });
@@ -1279,14 +1478,16 @@
     <p class="lb-title">Room: ${esc(roomCode)}</p>
     <table class="lb">
       <thead><tr>
-        <th>#</th><th>Player</th><th>LB Pts</th><th>Wins</th><th>Games</th><th>Best</th><th>Avg</th>
+        <th>#</th><th>Player</th><th>LB Pts</th><th>🥇</th><th>🥈</th><th>🥉</th><th>Games</th><th>Best</th><th>Avg</th>
       </tr></thead>
       <tbody>
         ${rows.map((r, i) => `<tr>
           <td>${medals[i] || i + 1}</td>
           <td><strong>${esc(r.name)}</strong></td>
           <td>${fmtPts(r.leaderboardPoints || 0)}</td>
-          <td>${r.wins || 0}</td>
+          <td>${r.wins    || 0}</td>
+          <td>${r.seconds || 0}</td>
+          <td>${r.thirds  || 0}</td>
           <td>${r.gamesPlayed || 0}</td>
           <td>${r.highScore || 0}</td>
           <td>${r.gamesPlayed ? Math.round((r.totalScore || 0) / r.gamesPlayed) : '–'}</td>

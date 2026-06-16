@@ -1456,7 +1456,17 @@
     };
 
     // ── End game ──────────────────────────────────────────────────
+    let _gameEnded = false;   // guard against double-submission
+    let _autoCloseTimer = null;
+
     window.doEndGame = async function () {
+      if (_gameEnded) return;          // already submitted
+      _gameEnded = true;
+
+      // Disable button immediately so a second tap can't fire
+      const btn = document.getElementById('btn-end');
+      if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
       const scores = finalScores().sort((a, b) => b.score - a.score);
       const ranked = assignPoints(scores);
 
@@ -1477,6 +1487,9 @@
 
       await updateDoc(doc(db, 'rooms', roomCode, 'games', gameId), { status: 'complete' });
       showWinner(ranked);
+
+      // Auto-return to setup after 12 seconds
+      _autoCloseTimer = setTimeout(() => closeWinner(), 12000);
     };
 
     function assignPoints(sorted) {
@@ -1514,6 +1527,8 @@
     function fmtPts(n) { return n % 1 === 0 ? n : n.toFixed(1); }
 
     window.closeWinner = function () {
+      clearTimeout(_autoCloseTimer);
+      _gameEnded = false; // reset for next game
       document.getElementById('winner-overlay').classList.remove('show');
       backToSetup();
     };
